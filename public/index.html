@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#160d12">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<title>Movie Together – فیلم با هم</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Vazirmatn:wght@400;600&display=swap">
+<style>
+:root{--ink:#160d12;--velvet:#2a1019;--line:#4a2433;--lamp:#f4b942;--paper:#f3e9dc;--dim:#b9a79a;--bad:#ff7b7b;--ok:#7bd88f}
+*{box-sizing:border-box}html,body{margin:0;background:var(--ink);color:var(--paper);font:16px/1.6 Vazirmatn,system-ui,sans-serif}
+main{max-width:640px;margin:auto;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+[hidden]{display:none!important}
+h1{font:400 3rem/1.1 Lalezar,Vazirmatn,sans-serif;color:var(--lamp);margin:8vh 0 4px}
+p.sub{color:var(--dim);margin:0 0 28px}
+input,button{font:inherit;color:inherit}
+input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--velvet);margin:6px 0}
+input:focus,button:focus-visible,summary:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+button{padding:11px 16px;border-radius:10px;border:1px solid var(--line);background:var(--velvet);cursor:pointer;min-height:44px}
+button.main{background:var(--lamp);color:#2a1604;border-color:var(--lamp);font-weight:600}
+button.on{border-color:var(--lamp);color:var(--lamp)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>input{flex:1;min-width:0}
+hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+#room{padding-top:max(56px,calc(env(safe-area-inset-top) + 44px))}
+.lang{position:absolute;top:12px;inset-inline-end:12px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.pill{font-size:.85rem;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+.pill.ok{color:var(--ok);border-color:var(--ok)}.pill.bad{color:var(--bad);border-color:var(--bad)}
+.stage{background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9;position:relative;border:1px solid var(--line)}
+.stage video,.stage iframe{width:100%;height:100%;border:0;background:#000;position:absolute;inset:0}
+.note{font-size:.85rem;color:var(--dim);margin:6px 0}
+#toast{color:var(--lamp);min-height:1.6em;margin:6px 0;font-size:.9rem}#toast.err{color:var(--bad)}
+ul{list-style:none;margin:8px 0;padding:0}li.p{padding:4px 0;color:var(--paper)}li.p small{color:var(--lamp)}
+#log{height:150px;overflow:auto;background:var(--velvet);border-radius:10px;padding:8px 12px;border:1px solid var(--line)}
+#log div{margin:2px 0;word-break:break-word}#log b{color:var(--lamp)}
+details{margin-top:14px;color:var(--dim)}summary{cursor:pointer}
+</style>
+</head>
+<body>
+<button class="lang" id="langBtn" aria-label="Language">EN</button>
+
+<main id="home">
+  <h1 data-i="title"></h1>
+  <p class="sub" data-i="tagline"></p>
+  <input id="name" maxlength="24" data-p="yourName" autocomplete="nickname">
+  <div class="row" style="margin-top:10px"><button class="main" id="createBtn" data-i="create"></button></div>
+  <hr>
+  <div class="row"><input id="code" data-p="joinCode" dir="ltr" autocapitalize="off" spellcheck="false"><button id="joinBtn" data-i="join"></button></div>
+  <p id="homeErr" class="note" style="color:var(--bad)"></p>
+</main>
+
+<main id="room" hidden>
+  <div class="bar"><span class="pill" id="status"></span><span class="pill" id="voice"></span><button id="leaveBtn" data-i="leave"></button></div>
+  <div class="stage">
+    <video id="v" controls playsinline></video>
+    <video id="screen" controls playsinline hidden></video>
+    <iframe id="frame" hidden referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" title="site"></iframe>
+  </div>
+  <p class="note" id="frameNote" hidden><span data-i="frame_note"></span> <a id="openTab" target="_blank" rel="noopener noreferrer" style="color:var(--lamp)" data-i="open_tab"></a></p>
+  <p id="toast" role="status"></p>
+  <div class="row"><input id="url" dir="ltr" inputmode="url" data-p="urlPh"><button class="main" id="loadBtn" data-i="load"></button></div>
+  <div class="row" style="margin-top:10px">
+    <button id="muteBtn"></button>
+    <button id="shareBtn"></button>
+    <button id="copyBtn" data-i="copy"></button>
+  </div>
+  <ul id="people"></ul>
+  <div id="log" aria-live="polite"></div>
+  <div class="row" style="margin-top:8px"><input id="msg" maxlength="500" data-p="chatPh"><button id="sendBtn" data-i="send"></button></div>
+  <details><summary data-i="trouble"></summary><p class="note" data-i="trouble_body"></p><p class="note" id="diag" dir="ltr"></p></details>
+  <audio id="ra" autoplay playsinline></audio>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const T={fa:{title:'فیلم با هم',tagline:'همزمان فیلم ببینید، با هم حرف بزنید.',yourName:'نام شما',create:'ساخت اتاق',joinCode:'کد یا لینک اتاق',join:'ورود به اتاق',copy:'کپی لینک دعوت',copied:'لینک کپی شد.',leave:'خروج',mute:'قطع میکروفون',unmute:'وصل میکروفون',shareScreen:'اشتراک صفحه',stopShare:'توقف اشتراک',load:'پخش برای هر دو',urlPh:'لینک مستقیم MP4/WebM یا آدرس سایت',chatPh:'پیام…',send:'ارسال',host:'میزبان',you:'شما',connecting:'در حال اتصال…',connected:'متصل',waiting:'منتظر دوستتان…',reconnecting:'اتصال قطع شد؛ تلاش دوباره…',err_full:'این اتاق پر است.',wake:'سرور احتمالاً در حال بیدار شدن یا ری‌استارت است (در پلن رایگان تا یک دقیقه). اگر ری‌استارت شده باشد اتاق از بین رفته است.',err_notfound:'اتاق پیدا نشد یا منقضی شده است. اگر سرور خوابیده یا ری‌استارت شده بود، یک اتاق جدید بسازید.',err_url:'یک آدرس معتبر http یا https وارد کنید.',err_media:'این ویدیو پخش نشد. لینک باید مستقیم به فایل MP4/WebM باشد، https داشته باشد و سرور اجازهٔ دسترسی بدهد.',err_mic:'به میکروفون دسترسی نداریم؛ اجازه را در تنظیمات مرورگر بدهید. تا آن موقع تماس صوتی کار نمی‌کند.',err_nomic:'مرورگر شما دسترسی به میکروفون را در این صفحه نمی‌دهد (به https نیاز است).',vLive:'صدا وصل است',vWait:'صدا: در انتظار',vOff:'بدون میکروفون',vFail:'صدا قطع شد',tap:'برای پخش، دکمهٔ پخش را بزنید.',no_share:'این مرورگر اشتراک صفحه ندارد (در اندروید معمولاً ندارد). لینک مستقیم ویدیو استفاده کنید، یا اشتراک صفحه را از رایانه شروع کنید.',share_warn:'فقط تب یا پنجرهٔ انتخابی شما پخش می‌شود. صدای تب ممکن است در همه مرورگرها نباشد.',frame_note:'بسیاری از سایت‌ها اجازهٔ نمایش داخل برنامه را نمی‌دهند و پخش آن‌ها همگام نمی‌شود. اگر خالی ماند، از اشتراک صفحه استفاده کنید.',open_tab:'باز کردن در تب جدید',trouble:'عیب‌یابی صدا',trouble_body:'برای جلوگیری از اکو از هدفون استفاده کنید. اجازهٔ میکروفون را از نماد کنار آدرس بررسی کنید. ضبط صدای تب دیگر در اندروید معمولاً ممکن نیست. اگر صدا وصل نشد، احتمالاً سرور TURN لازم است.'},
+en:{title:'Movie Together',tagline:'Watch in sync. Talk while you watch.',yourName:'Your name',create:'Create room',joinCode:'Room code or link',join:'Join room',copy:'Copy invite link',copied:'Link copied.',leave:'Leave',mute:'Mute mic',unmute:'Unmute mic',shareScreen:'Share screen',stopShare:'Stop sharing',load:'Play for both',urlPh:'Direct MP4/WebM link or website address',chatPh:'Message…',send:'Send',host:'host',you:'You',connecting:'Connecting…',connected:'Connected',waiting:'Waiting for your friend…',reconnecting:'Connection lost; retrying…',err_full:'This room is full.',err_notfound:'Room not found or expired. If the server slept or restarted, create a new room.',wake:'The server may be waking up (the free plan can take up to a minute) or restarting. Rooms are lost on restart.',err_url:'Enter a valid http or https address.',err_media:'This video could not play. Use a direct MP4/WebM link over https that the server allows to be embedded.',err_mic:'No microphone access. Allow it in browser settings. Voice chat will not work until then.',err_nomic:'Your browser blocks microphone access on this page (https required).',vLive:'Voice connected',vWait:'Voice: waiting',vOff:'No microphone',vFail:'Voice dropped',tap:'Tap play to start playback.',no_share:'This browser has no screen sharing (Android usually does not). Use a direct video link, or start sharing from a computer.',share_warn:'Only the tab or window you pick is shared. Tab audio may not be available in every browser.',frame_note:'Many sites refuse to load inside apps, and playback there is not synced. If it stays blank, use screen sharing.',open_tab:'Open in new tab',trouble:'Audio troubleshooting',trouble_body:'Use headphones to avoid echo. Check the microphone permission from the icon beside the address bar. Capturing another tab\u2019s audio usually does not work on Android. If voice will not connect, a TURN server is probably needed.'}};
+const $=s=>document.querySelector(s);
+let lang=localStorage.lang||'fa';const t=k=>T[lang][k]||k;
+function applyLang(){document.documentElement.lang=lang;document.documentElement.dir=lang==='fa'?'rtl':'ltr';$('#langBtn').textContent=lang==='fa'?'EN':'فا';
+ document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));document.querySelectorAll('[data-p]').forEach(e=>e.placeholder=t(e.dataset.p));
+ if(room){renderStatus();renderPeople();setMuteLabels();}}
+$('#langBtn').onclick=()=>{lang=lang==='fa'?'en':'fa';localStorage.lang=lang;applyLang()};
+
+const cid=sessionStorage.cid||(sessionStorage.cid=crypto.randomUUID());
+let room=null,socket=null,state=null,ice=[],localStream=null,pc=null,polite=false,makingOffer=false,ignoreOffer=false,screenId=null,sharing=null,micOn=true,connected=false,voiceState='wait';
+const v=$('#v'),scr=$('#screen'),frame=$('#frame'),ra=$('#ra');
+
+function toast(k,err){const e=$('#toast');e.textContent=k?t(k):'';e.className=err?'err':''}
+function renderStatus(){const s=$('#status');const n=state?.peers.length||0;
+ s.textContent=!connected?t(room&&socket&&state?'reconnecting':'connecting'):n<2?t('waiting'):t('connected');s.className='pill '+(connected&&n>1?'ok':!connected&&state?'bad':'');
+ const vo=$('#voice');vo.textContent=t({live:'vLive',wait:'vWait',off:'vOff',fail:'vFail'}[voiceState]);vo.className='pill '+(voiceState==='live'?'ok':voiceState==='fail'||voiceState==='off'?'bad':'')}
+function renderPeople(){$('#people').innerHTML='';(state?.peers||[]).forEach(p=>{const li=document.createElement('li');li.className='p';li.textContent=(p.id===cid?t('you')+' – ':'')+p.name+' ';
+ if(p.id===state.host){const s=document.createElement('small');s.textContent='('+t('host')+')';li.append(s)}$('#people').append(li)})}
+function setMuteLabels(){$('#muteBtn').textContent=t(micOn?'mute':'unmute');$('#muteBtn').classList.toggle('on',!micOn);$('#muteBtn').disabled=!localStream;
+ $('#shareBtn').textContent=t(sharing?'stopShare':'shareScreen');$('#shareBtn').classList.toggle('on',!!sharing)}
+
+/* ---------- entering / leaving ---------- */
+async function createRoom(){try{const r=await fetch('/api/rooms',{method:'POST'});if(!r.ok)throw 0;enter((await r.json()).id)}catch{$('#homeErr').textContent=t('err_notfound')}}
+function parseCode(s){return s.trim().split(/[\/#]/).filter(Boolean).pop()||''}
+async function enter(id){
+ const name=($('#name').value.trim()||t('you')).slice(0,24);localStorage.name=name;room=id;location.hash='/r/'+id;
+ $('#home').hidden=true;$('#room').hidden=false;state=null;connected=false;applyLang();renderStatus();
+ if(!navigator.mediaDevices?.getUserMedia){toast('err_nomic',true);voiceState='off'}
+ else try{localStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch(e){toast('err_mic',true);voiceState='off'}
+ try{const j=await (await fetch('/api/ice')).json();ice=j.iceServers;hasTurn=!!j.turn}catch{ice=[{urls:'stun:stun.l.google.com:19302'}]}
+ socket=io();
+ socket.on('connect',()=>{clearTimeout(wakeT);socket.emit('join',{room:id,cid,name},res=>{
+  if(res.error){leave(true);$('#homeErr').textContent=t(res.error==='full'?'err_full':'err_notfound');return}
+  connected=true;if($('#toast').textContent===t('wake'))toast('');applyState(res,true);if(res.peers.length>1)startPc({id:res.peers.find(p=>p.id!==cid).id})})});
+ socket.on('disconnect',()=>{connected=false;renderStatus();clearTimeout(wakeT);wakeT=setTimeout(()=>toast('wake'),8000)});
+ socket.on('state',s=>{state=s;renderStatus();renderPeople()});
+ socket.on('peer-joined',startPc);
+ socket.on('peer-left',()=>{closePc();voiceState=localStream?'wait':'off';renderStatus()});
+ socket.on('signal',onSignal);
+ socket.on('media',m=>loadMedia(m.url));
+ socket.on('playback',p=>applyPlayback(p,p.tick?0.6:0.3));
+ socket.on('chat',addChat);
+ setMuteLabels();refreshDiag();
+}
+function applyState(s,first){state=s;renderStatus();renderPeople();
+ if(first&&s.media.url){if(s.media.url!==curUrl)loadMedia(s.media.url,()=>applyPlayback(s.media,0.3));else applyPlayback(s.media,0.6)}}
+function leave(keepHome){try{socket?.emit('leave');socket?.close()}catch{}
+ closePc();stopShare(true);localStream?.getTracks().forEach(x=>x.stop());localStream=null;socket=null;room=null;state=null;connected=false;
+ v.removeAttribute('src');v.load();frame.src='about:blank';frame.hidden=true;$('#frameNote').hidden=true;v.hidden=false;
+ $('#room').hidden=true;$('#home').hidden=false;history.replaceState(null,'','/');toast('');if(!keepHome)$('#homeErr').textContent=''}
+
+/* ---------- WebRTC voice (perfect negotiation) ---------- */
+function startPc(ev){closePc();const oid=ev?.id||state?.peers.find(p=>p.id!==cid)?.id;if(!oid||oid===cid)return;polite=cid>oid;
+ pc=new RTCPeerConnection({iceServers:ice});const me=pc;makingOffer=false;ignoreOffer=false;
+ if(localStream)localStream.getAudioTracks().forEach(tr=>pc.addTrack(tr,localStream));else pc.addTransceiver('audio',{direction:'recvonly'});
+ pc.onnegotiationneeded=async()=>{try{makingOffer=true;await me.setLocalDescription();socket.emit('signal',{description:me.localDescription})}catch(e){console.warn(e)}finally{makingOffer=false}};
+ pc.onicecandidate=e=>{if(e.candidate)socket.emit('signal',{candidate:e.candidate})};
+ pc.ontrack=e=>{const s=e.streams[0];if(!s)return;
+  if(s.id===screenId){scr.srcObject=s;scr.hidden=false;v.hidden=true;scr.play().catch(()=>toast('tap'));e.track.onended=hideScreen}
+  else{ra.srcObject=s;ra.play().catch(()=>toast('tap'))}};
+ pc.onconnectionstatechange=()=>{const st=me.connectionState;
+  if(st==='connected')voiceState=localStream?'live':'off';else if(st==='failed'){voiceState='fail';me.restartIce()}else if(st==='disconnected')voiceState='fail';
+  renderStatus();refreshDiag()}}
+function closePc(){if(pc){pc.onconnectionstatechange=pc.ontrack=pc.onnegotiationneeded=pc.onicecandidate=null;pc.close();pc=null}hideScreen()}
+async function onSignal(d){
+ if(d.screenStream!==undefined){screenId=d.screenStream;if(!screenId)hideScreen();return}
+ if(!pc)return;
+ try{if(d.description){const offer=d.description.type==='offer';
+   ignoreOffer=!polite&&offer&&(makingOffer||pc.signalingState!=='stable');if(ignoreOffer)return;
+   await pc.setRemoteDescription(d.description);
+   if(offer){await pc.setLocalDescription();socket.emit('signal',{description:pc.localDescription})}}
+  else if(d.candidate){try{await pc.addIceCandidate(d.candidate)}catch(e){if(!ignoreOffer)throw e}}}catch(e){console.warn(e)}}
+function hideScreen(){scr.srcObject=null;scr.hidden=true;v.hidden=!!frame.src&&!frame.hidden}
+$('#muteBtn').onclick=()=>{micOn=!micOn;localStream?.getAudioTracks().forEach(x=>x.enabled=micOn);setMuteLabels()};
+
+/* ---------- screen share (optional fallback) ---------- */
+$('#shareBtn').onclick=async()=>{
+ if(sharing)return stopShare();
+ if(!navigator.mediaDevices?.getDisplayMedia){toast('no_share',true);return}
+ if(!pc){toast('waiting');return}
+ try{const s=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});sharing=s;
+  socket.emit('signal',{screenStream:s.id});s.getTracks().forEach(tr=>{pc.addTrack(tr,s);tr.onended=()=>stopShare()});
+  toast('share_warn');setMuteLabels()}catch(e){toast(e.name==='NotAllowedError'?'':'no_share',e.name!=='NotAllowedError')}};
+function stopShare(silent){if(!sharing)return;const s=sharing;sharing=null;
+ try{const mine=s.getTracks();pc?.getSenders().filter(x=>x.track&&mine.includes(x.track)).forEach(x=>pc.removeTrack(x))}catch{}
+ s.getTracks().forEach(x=>x.stop());
+ if(!silent){socket?.emit('signal',{screenStream:null});setMuteLabels()}}
+
+/* ---------- media + sync ---------- */
+let wakeT=0,quietUntil=0,lastApplied=null,curUrl='',hasTurn=false;const quiet=fn=>{quietUntil=Date.now()+1500;fn()};
+const isFile=u=>/\.(mp4|webm|ogv|m4v|mov)$/i.test(new URL(u).pathname);
+function loadMedia(url,done){toast('');curUrl=url;lastApplied=null;
+ if(isFile(url)){frame.src='about:blank';frame.hidden=true;$('#frameNote').hidden=true;v.hidden=!scr.hidden;quiet(()=>{v.src=url;v.load()});
+  if(done)v.addEventListener('loadedmetadata',done,{once:true})}
+ else if(new URL(url).origin===location.origin){toast('err_url',true)}
+ else{v.pause();v.hidden=true;frame.hidden=false;frame.src=url;$('#openTab').href=url;$('#frameNote').hidden=false}
+ $('#url').value=url}
+v.addEventListener('error',()=>{if(v.getAttribute('src'))toast('err_media',true)});
+const isEcho=()=>Date.now()<quietUntil&&(!lastApplied||(v.paused===!lastApplied.playing&&v.playbackRate===lastApplied.rate&&Math.abs(v.currentTime-lastApplied.time)<2));
+['play','pause','seeked','ratechange'].forEach(ev=>v.addEventListener(ev,()=>{if(isEcho()||!socket||!connected)return;
+ socket.emit('playback',{playing:!v.paused,time:v.currentTime,rate:v.playbackRate})}));
+function applyPlayback(p,tol){lastApplied=p;quiet(()=>{if(Math.abs(v.currentTime-p.time)>tol)v.currentTime=p.time;if(v.playbackRate!==p.rate)v.playbackRate=p.rate;
+ if(p.playing&&v.paused)v.play().catch(()=>toast('tap'));if(!p.playing&&!v.paused)v.pause()})}
+setInterval(()=>{if(socket&&connected&&state?.host===cid&&!v.paused&&!v.hidden)socket.emit('playback',{playing:true,time:v.currentTime,rate:v.playbackRate,tick:true})},3000); // drift correction
+$('#loadBtn').onclick=()=>{const u=$('#url').value.trim();try{if(!/^https?:$/.test(new URL(u).protocol))throw 0}catch{toast('err_url',true);return}socket?.emit('media',{url:u})};
+$('#url').addEventListener('keydown',e=>{if(e.key==='Enter')$('#loadBtn').click()});
+
+/* ---------- chat, invite, misc ---------- */
+function addChat(m){const d=document.createElement('div'),b=document.createElement('b');b.textContent=m.from+': ';d.append(b,document.createTextNode(m.text));$('#log').append(d);$('#log').scrollTop=1e9}
+function sendMsg(){const i=$('#msg'),x=i.value.trim();if(x&&socket){socket.emit('chat',{text:x});i.value=''}}
+$('#sendBtn').onclick=sendMsg;$('#msg').addEventListener('keydown',e=>{if(e.key==='Enter')sendMsg()});
+$('#copyBtn').onclick=async()=>{const link=location.origin+'/#/r/'+room;
+ try{if(navigator.share&&/Android|iPhone/i.test(navigator.userAgent))await navigator.share({url:link});else{await navigator.clipboard.writeText(link);toast('copied')}}catch{prompt('Link',link)}};
+function refreshDiag(){$('#diag').textContent=[`mic: ${localStream?'ok':'none'}`,`pc: ${pc?.connectionState||'-'}`,`ice: ${pc?.iceConnectionState||'-'}`,`turn: ${hasTurn}`,`secure: ${isSecureContext}`,`share: ${!!navigator.mediaDevices?.getDisplayMedia}`].join(' | ')}
+$('#createBtn').onclick=createRoom;$('#joinBtn').onclick=()=>{const id=parseCode($('#code').value);id?enter(id):$('#homeErr').textContent=t('err_notfound')};
+$('#leaveBtn').onclick=()=>leave();
+$('#name').value=localStorage.name||'';applyLang();
+const m=location.hash.match(/^#\/r\/([\w-]+)/);if(m)$('#code').value=m[1];
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+</script>
+</body>
+</html>

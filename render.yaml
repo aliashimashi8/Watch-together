@@ -1,0 +1,18 @@
+# Render "Blueprint": one web service = frontend + backend (WebSocket + HTTPS included).
+services:
+  - type: web
+    name: movie-together
+    runtime: node
+    plan: free            # free sleeps after ~15 min idle and drops rooms. Change to "starter" for an always-on server.
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: TURN_URLS      # optional, set in the Render dashboard
+        sync: false
+      - key: TURN_SECRET    # optional, set in the Render dashboard
+        sync: false
